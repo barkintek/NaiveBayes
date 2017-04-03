@@ -4,75 +4,49 @@ import copy
 from sys import argv
 
 def main():
-	# args
-	# arg1 - input data filename
-	# arg2 - output data filename
-	# arg3 - class value (class column is the always last column of the data matrix)
-	# rest are condition values <colnumber>:value
-
 	matrix = readcsv(argv[1])
-	problist = []
+	prob = posterior(matrix, argv[2], argv[3:])
 
-	writer = csv.writer(open(argv[2], "w"), quoting=csv.QUOTE_ALL)
+# Determine P(class | c1, c2, .. cn)
+def posterior(matrix, targetclass, conditions):
+	# find target class column index
+	tcol = matrix[0].index(targetclass)
+	# find condition column indices
+	ccol = [matrix[0].index(cond.split(":")[0]) for cond in conditions]
+	# find condtion values respectivly
+	cval = [cond.split(":")[1] for cond in conditions]
+	# construct needed frequency tables
+	ftables = [freqtable(matrix, cn, tcol) for cn in ccol]
+	# construct needed likehood tables, in same order as ftables
+	ltables = [likehoodtable(ftable) for ftable in ftables]
+	# possible classes
+	classes = list(set(column(matrix[1:], matrix[0].index(targetclass))))
+	# outcomes for per possible class, in same order as classes
+	outcomes = [1] * len(classes)
+	# for each possible class, determine the P(class| c1 c2, .. cn)
+	for cl, i in zip(classes, range(0, len(classes))):
+		# for each condition provided
+		for cn in range(0, len(ccol)):
+			# get relevant likehood table
+			liketable = ltables[cn]
+			# find P(condition|class)
+			plike = liketable[column(liketable, 0).index(cval[cn])][liketable[0].index(cl)]
+			# determine P(condition)
+			pcond = len([v for v in column(matrix[1:], ccol[cn]) if v == cval[cn]])/len(matrix)
+			# multiply P(condition|class) and P(condition)
+			outcomes[i]*= plike*pcond
 
-	for i in range(0, len(matrix[0]) -1):
-		ptable = classprobtable(matrix, i, len(matrix[0]) -1)
-		problist.append(ptable)
+	for cl, i in zip(classes, range(0, len(classes))):
+		pstr = "P(" + cl + "|"
+		for condval in cval:
+			pstr += condval + ","
+		pstr = pstr[:-1] + ") = " + str(outcomes[i])
+		print(pstr)
 
-		# write trained data to csv
-		for row in ptable:
-			writer.writerow(row)
-		writer.writerow([]) # newline
-
-	prob = 1
-	for i in range(4, len(argv)):
-		# column details, 0 is column number, 1 is column value
-		coldetail = argv[i].split(":")
-		# find corresponding probability table in the list
-		ptable = problist[int(coldetail[0])]
-		# find corresponding row column indices
-		c = ptable[0].index(argv[3])
-		r = column(ptable, 0).index(coldetail[1])
-		# find probability and multiply it
-		prob *= ptable[r][c]
-
-	outstr = "P(" + argv[3] + "|"
-	for i in range(4, len(argv)):
-		outstr += argv[i].split(":")[1] + ","
-	outstr = outstr[:-1] + ")"
-
-	print(outstr + " = " + str(prob))
-
-# Construct P(class | condition) table
-def classprobtable(matrix, ccol, tcol):
-	# matrix headerless
-	matrixhl = matrix[1:]
-	# frequency, condition tables
-	ftable = freqtable(matrix, ccol, tcol)
-	ctable = condprobtable(ftable)
-	# class probability - P(class|condition) table
-	ptable = copy.deepcopy(ctable)
-	# rename table name as P(class|condition)
-	tnames = ptable[0][0].split("|")
-	ptable[0][0] = "P(" + tnames[1][:-1] + "|" + tnames[0][2:] + ")"
-	# column length
-	clength =  len(ptable)
-	# for each column starting from 1
-	for c in range(1, len(ptable[0])):
-		# for each row starting from 1
-		for r in range(1, clength):
-			# P(class) * length of total size
-			classprob = len([row for row in matrixhl if row[tcol] == ptable[0][c]])
-			# P(condition) * length of total size
-			condprob = len([row for row in matrixhl if row[ccol] == ptable[r][0]])
-			# note that both probabilities have *length of total size
-			# so it is unneccessary to divide them with it, since dividing those altogether will omit them
-			ptable[r][c] = (ptable[r][c] * classprob) / condprob
-
-	return ptable
+	print("The classified class is '" + classes[outcomes.index(max(outcomes))] + "'")
 
 # Construct P(condition | class) table 
-def condprobtable(ftable):
+def likehoodtable(ftable):
 	ctable = copy.deepcopy(ftable)
 	# rename table name as P(condition|class)
 	ctable[0][0] = "P" + ctable[0][0][1:]
