@@ -14,7 +14,7 @@ def main():
 	wr = csv.writer(fout, quoting=csv.QUOTE_ALL)
 
 	for i in range(0, len(matrix[0]) -1):
-		ptable = classprobtable(matrix, i, 6)
+		ptable = classprobtable(matrix, i, len(matrix[0]) -1)
 		#pmatrix(ptable)
 		for row in ptable:
 			wr.writerow(row)
