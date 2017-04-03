@@ -4,21 +4,44 @@ import copy
 from sys import argv
 
 def main():
+	# args
+	# arg1 - input data filename
+	# arg2 - output data filename
+	# arg3 - class value (class column is the always last column of the data matrix)
+	# rest are condition values <colnumber>:value
 
-	script, filein, fileout = argv
+	matrix = readcsv(argv[1])
+	problist = []
 
-	matrix = readcsv(filein)
-	#pmatrix(matrix)
-	
-	fout = open(fileout, 'w')
-	wr = csv.writer(fout, quoting=csv.QUOTE_ALL)
+	writer = csv.writer(open(argv[2], "w"), quoting=csv.QUOTE_ALL)
 
 	for i in range(0, len(matrix[0]) -1):
 		ptable = classprobtable(matrix, i, len(matrix[0]) -1)
-		#pmatrix(ptable)
+		problist.append(ptable)
+
+		# write trained data to csv
 		for row in ptable:
-			wr.writerow(row)
-		wr.writerow([]) # newline
+			writer.writerow(row)
+		writer.writerow([]) # newline
+
+	prob = 1
+	for i in range(4, len(argv)):
+		# column details, 0 is column number, 1 is column value
+		coldetail = argv[i].split(":")
+		# find corresponding probability table in the list
+		ptable = problist[int(coldetail[0])]
+		# find corresponding row column indices
+		c = ptable[0].index(argv[3])
+		r = column(ptable, 0).index(coldetail[1])
+		# find probability and multiply it
+		prob *= ptable[r][c]
+
+	outstr = "P(" + argv[3] + "|"
+	for i in range(4, len(argv)):
+		outstr += argv[i].split(":")[1] + ","
+	outstr = outstr[:-1] + ")"
+
+	print(outstr + " = " + str(prob))
 
 # Construct P(class | condition) table
 def classprobtable(matrix, ccol, tcol):
@@ -43,7 +66,7 @@ def classprobtable(matrix, ccol, tcol):
 			# P(condition) * length of total size
 			condprob = len([row for row in matrixhl if row[ccol] == ptable[r][0]])
 			# note that both probabilities have *length of total size
-			# so it is unneccessary to divide them with it, since dividing those altogether will omit those
+			# so it is unneccessary to divide them with it, since dividing those altogether will omit them
 			ptable[r][c] = (ptable[r][c] * classprob) / condprob
 
 	return ptable
