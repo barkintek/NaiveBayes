@@ -1,82 +1,105 @@
+# Naive bayes algorithm implementation in python
 import csv
 import copy
+from sys import argv
 
-# param1 - data matrix
-# param2 - column
-# returns specified column values of the matrix
-def column(matrix, i):
-	return [row[i] for row in matrix]
+def main():
 
-# param1 - data matrix
-# param2 - condition column
-# param3 - target column
-# returns frequency table of conditions
-def frequencyTable(matrix, ccol, tcol):
-	# set headers
-	table = [[matrix[0][ccol] + "|" + matrix[0][tcol]] + list(set(column(matrix[1:], tcol)))]
-	for item in set(column(matrix[1:], ccol)):
-		table.append([item])
+	script, filein, fileout = argv
+
+	matrix = readcsv(filein)
+	#pmatrix(matrix)
 	
-	# fill frequencies
-	# for each target value
-	for i in range(1, len(table[0])):
-		# for each condition value
-		for j in range(1, len(column(table, 0))):
-			table[j].append(len([d for d in matrix[1:] if d[ccol] == table[j][0] and d[tcol] == table[0][i]]))
-
-	return table
-
-# param1 - frequency table
-# returns P(condition | class) table, or in other words, condition under class probability table
-def conditionUnderClassProbTable(frequencyTable):
-	table = copy.deepcopy(frequencyTable)
-	table[0][0] = "P(" + table[0][0] + ")"
-	# for each class
-	for i in range(1, len(table[0])):
-		# for each condition
-		for j in range(1, len(column(table, 0))):
-			# condition occurrences under class / total occurrences of class
-			table[j][i] = table[j][i]/sum(column(frequencyTable[1:], i))
-
-	return table
-
-# param1 - data matrix
-# param2 - condition column
-# param3 - target column
-# returns P(class | condition) table, or in other wods, class under condition probability table
-def classUnderConditionProbTable(matrix, ccol, tcol):
-	ftable = frequencyTable(matrix, ccol, tcol)
-	ctable = conditionUnderClassProbTable(ftable)
-	table = copy.deepcopy(ctable)
-	table[0][0] = "P(" + matrix[0][tcol] + "|" + matrix[0][ccol] + ")"
-	# for each class
-	for i in range(1, len(table[0])):
-		# for each condition
-		for j in range(1, len(column(table, 0))):
-			# P(class | condition) = (P(condition | class) * P(class)) / P(condition)
-			table[j][i] *= sum(column(ftable[1:], i))/len(column(matrix[1:], 0))
-			table[j][i] /= sum(ftable[j][1:])/len(column(matrix[1:], 0))
-
-			pass
-
-	return table
-
-# param1 - input file to train
-# param2 - output file to output trained data
-def trainNaiveBayes(inFile, outFile):
-	data = []
-	with open(inFile, "r") as csvfile:
-		for line in csvfile:
-			data.append(line.strip().split(","))
-
-	fout = open(outFile, 'w')
+	fout = open(fileout, 'w')
 	wr = csv.writer(fout, quoting=csv.QUOTE_ALL)
 
-	for i in range(0, len(data[0]) -1):
-		ptable = classUnderConditionProbTable(data, i, len(data[0]) -1)
-		for item in ptable:
-			wr.writerow(item)
-		wr.writerow([])
+	for i in range(0, len(matrix[0]) -1):
+		ptable = classprobtable(matrix, i, 6)
+		#pmatrix(ptable)
+		for row in ptable:
+			wr.writerow(row)
+		wr.writerow([]) # newline
 
-# main
-trainNaiveBayes("data.csv", "trained_data.csv")
+# Construct P(class | condition) table
+def classprobtable(matrix, ccol, tcol):
+	# matrix headerless
+	matrixhl = matrix[1:]
+	# frequency, condition tables
+	ftable = freqtable(matrix, ccol, tcol)
+	ctable = condprobtable(ftable)
+	# class probability - P(class|condition) table
+	ptable = copy.deepcopy(ctable)
+	# rename table name as P(class|condition)
+	tnames = ptable[0][0].split("|")
+	ptable[0][0] = "P(" + tnames[1][:-1] + "|" + tnames[0][2:] + ")"
+	# column length
+	clength =  len(ptable)
+	# for each column starting from 1
+	for c in range(1, len(ptable[0])):
+		# for each row starting from 1
+		for r in range(1, clength):
+			# P(class) * length of total size
+			classprob = len([row for row in matrixhl if row[tcol] == ptable[0][c]])
+			# P(condition) * length of total size
+			condprob = len([row for row in matrixhl if row[ccol] == ptable[r][0]])
+			# note that both probabilities have *length of total size
+			# so it is unneccessary to divide them with it, since dividing those altogether will omit those
+			ptable[r][c] = (ptable[r][c] * classprob) / condprob
+
+	return ptable
+
+# Construct P(condition | class) table 
+def condprobtable(ftable):
+	ctable = copy.deepcopy(ftable)
+	# rename table name as P(condition|class)
+	ctable[0][0] = "P" + ctable[0][0][1:]
+	# for each column starting from 1
+	for c in range(1, len(ctable[0])):
+		# column sum - sum of frequences of the current column 
+		csum = sum(column(ftable[1:], c))
+		# for each row starting from 1
+		for r in range(1, len(ctable)):
+			ctable[r][c] = ctable[r][c] / csum
+	return ctable
+
+# Construct frequency table
+def freqtable(matrix, ccol, tcol):
+	# matrix headerless
+	matrixhl = matrix[1:]
+	# table name
+	tn = "f(" + matrix[0][ccol] + "|" + matrix[0][tcol] + ")" 
+	# header
+	ftable = [[tn] + list(set(column(matrixhl, tcol)))]
+	# for each unique condition
+	for ucond in set(column(matrixhl, ccol)):
+		row = [ucond]
+		# for each header(class) value
+		for cval in ftable[0][1:]:
+			# construct row with their corresponding frequency values
+			row += [len([r for r in matrixhl if r[ccol] == ucond and r[tcol] == cval])]
+		ftable.append(row)
+
+	return ftable
+
+# Slice column from matrix
+def column(matrix, c):
+	return [row[c] for row in matrix]
+
+# Read matrix from csv file
+def readcsv(filename):
+	matrix = []
+	with open(filename, "r") as csvfile:
+		for line in csvfile:
+			matrix.append(line.strip().split(","))
+
+	return matrix
+
+# Pretty print matrix
+# For debug purposes
+def pmatrix(matrix):
+	for row in matrix:
+		print(row)
+	print()	# newline
+
+if __name__ == '__main__':
+	main()
