@@ -1,4 +1,6 @@
 # NaiveBayes
+Naive bayes classification algorithm in python
+
 
 ### Example
 ```
